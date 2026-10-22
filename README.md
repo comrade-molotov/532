@@ -1,209 +1,343 @@
-# SA-MP Freeroam (GL სტილი) — 0.3.7
+# SA-MP 0.3.7 Freeroam (Grand Larceny სტილი) — მზა სერვერი
 
-მინიმალური, სტაბილური freeroam სერვერი. feature-ები ემატება ეტაპობრივად,
-მხოლოდ წინა ეტაპის დადასტურების შემდეგ.
+მარტივი, სტაბილური freeroam სერვერი: ანგარიშები, მანქანები, ტელეპორტი, სკინები,
+კაზინო (4 თამაში), drift რეჟიმი და drift დუელი, ადმინ სისტემა ანტიჩიტით,
+სტატისტიკა (`/stats`, `/top`).
 
-**მიმდინარე სტატუსი: ეტაპი 1 — მონაცემთა ბაზა + ანგარიშის სისტემა (დასრულებულია)**
+**სწრაფი დაწყება (2 ბრძანება):**
+
+| OS | ბრძანებები |
+|---|---|
+| Windows | `setup.bat` → შემდეგ `samp-server.exe` |
+| Linux | `./setup.sh` → შემდეგ `./samp03svr` |
+
+`setup` თვითონ ჩამოტვირთავს ყველა plugin-ს, აკომპილირებს gamemode-ს და დაგიტოვებთ
+მხოლოდ ბაზის შექმნას + `rcon_password`-ის შეცვლას (იხ. ქვემოთ).
 
 ---
 
 ## 1. ფაილების სტრუქტურა
 
 ```
-gamemodes/freeroam.pwn      მთავარი ფაილი: DB კავშირი, ცხრილის შექმნა, SA-MP callback-ები
-includes/playerdata.inc     მოთამაშის მონაცემები (money/score/admin), MySQL handle, save
-includes/accounts.inc       რეგისტრაცია/ავტორიზაცია + SHA256 (პაროლის ჰეშირება)
-database.sql                SQL სქემა (ამ ეტაპზე მხოლოდ accounts ცხრილი)
-README.md                   ეს ინსტრუქცია
+gamemodes/freeroam.pwn        მთავარი ფაილი: DB კავშირი, callback-ები, ცხრილების შექმნა
+includes/playerdata.inc       მოთამაშის მონაცემები (money/score/admin), MySQL handle, /stats, /top
+includes/accounts.inc         რეგისტრაცია/ავტორიზაცია + SHA-256 პაროლის ჰეშირება
+includes/vehicles.inc         /v, drift რეჟიმი (TextDraw HUD), /duel (drift დუელი)
+includes/casino.inc           /casino: blackjack, roulette, slots, poker + casino_log
+includes/admin.inc            ადმინ დონეები 1-3, ბანები, ანტიჩიტი
+includes/a_samp.inc ...       SA-MP სტანდარტული include-ები
+includes/a_mysql.inc          MySQL plugin-ის include (R41-4 API)
+includes/sscanf2.inc          sscanf2 include
+includes/streamer.inc         streamer include
+
+pawno/pawncc                 კომპილატორი (Linux; Windows-ზე setup ჩამოტვირთავს pawncc.exe-ს)
+pawno/include/               კომპილატორის სტანდარტული include-ები (float.inc, string.inc, ...)
+
+plugins/                     აქ უნდა იყოს: mysql, streamer, sscanf (.dll ან .so)
+server.cfg                   მზა კონფიგურაცია (plugins-ის ხაზი, gamemode0, rcon_password)
+database.sql                 ბაზის სქემა: accounts, casino_log, bans
+
+download_dependencies.sh/.bat   მხოლოდ plugin-ების ჩამოტვირთვა
+setup.sh / setup.bat            ჩამოტვირთვა + კომპილაცია (მთავარი ბრძანება)
+README.md                       ეს ინსტრუქცია
 ```
 
-შემდეგ ეტაპებზე დაემატება: `includes/vehicles.inc`, `includes/casino.inc`,
-`includes/admin.inc` — მეტი ფაილი არ იქნება.
+> `plugins/` რეპოზიტორიაში ცარიელია, რადგან plugin-ები ბინარული ფაილებია და
+> GitHub-იდან ჩამოიტვირთება. `setup` ამას ერთ ბრძანებაში აკეთებს — ხელით
+> ძებნა არ დაგჭირდება. თუ სკრიპტის გარეშე გინდა, იხ. ნაწილი 5.
 
 ---
 
-## 2. რა მუშაობს ამ ეტაპზე
+## 2. Windows — ნაბიჯ-ნაბიჯ
 
-- MySQL კავშირი გაშვებისას + `accounts` ცხრილის ავტომატური შექმნა
-- ავტორიზაცია მხოლოდ **username + password**-ით (ავტომატურად nick-იდან)
-- 2 დიალოგი: `Login` და `Register` (DIALOG_STYLE_PASSWORD)
-- პაროლი ინახება **SHA256** ჰეშად (64 hex სიმბოლო), არასდროს plain text-ად
-- ავტორიზაციამდე მოთამაშე spectate-ზეა — ვერ იძვრება და ვერ ჩნდება
-- წარმატებული login-ის შემდეგ: spawn, money/score/admin_level ჩატვირთვა
-- დისკონექტზე: money/score ინახება ბაზაში
-- ახალი ანგარიშის საწყისი მდგომარეობა: **$5000**, score 0, admin 0
-  (იცვლება `includes/playerdata.inc`-ში — `START_MONEY` / `START_SCORE`)
+### ნაბიჯი 1. SA-MP 0.3.7 სერვერი
+ჩამოტვირთე `samp037_svr_R2-1-1_win32.zip`:
+<https://www.sa-mp.com/download.php> (აირჩიე **Windows Server**).
 
----
+გახსენი არქივი და მისი შიგთავსი (`samp-server.exe`, `announce.exe`, `samp-npc.exe`,
+`server.cfg`, `npcmodes/`, `filterscripts/`) გადმოიტანე **ამ რეპოზიტორიის ძირში**.
+უკვე არსებული `server.cfg` და `gamemodes/` **არ გადააწერო** — ისინი აქ მზადაა.
 
-## 3. რა ფაილები გჭირდება და საიდან
+საბოლოო საქაღალდე უნდა გამოიყურებოდეს ასე:
 
-### ა) SA-MP 0.3.7 სერვერი
-https://www.sa-mp.com/download.php → `samp037_svr_R2-1-1_win32.zip` (Windows) ან
-`samp037svr_R2-1.tar.gz` (Linux).
-ამ ეტაპზე plugin-ებიდან მხოლოდ MySQL გჭირდება.
+```
+samp-server.exe
+samp-npc.exe
+announce.exe
+server.cfg            <- აქედან
+gamemodes/freeroam.amx
+gamemodes/freeroam.pwn
+plugins/mysql.dll  streamer.dll  sscanf.dll
+libmysql.dll          <- mysql plugin-ისთვის
+includes/  pawno/  database.sql  README.md
+```
 
-### ბ) MySQL plugin — BlueG R41-4 (აუცილებელი)
-რელიზის გვერდი: https://github.com/pBlueG/SA-MP-MySQL/releases/tag/R41-4
+### ნაბიჯი 2. ერთი ბრძანება — `setup.bat`
+ორჯერ დააწკაპუნე `setup.bat`-ზე (ან `cmd`-ში: `setup.bat`).
 
-| OS | ფაილი | რას შეიცავს |
-|---|---|---|
-| Windows | `mysql-R41-4-win32.zip` | `plugins/mysql.dll` + `pawno/include/a_mysql.inc` |
-| Linux | `mysql-R41-4-Debian-static.tar.gz` | `plugins/mysql_static.so` (libmysqlclient არ სჭირდება) |
-| Linux | `mysql-R41-4-Debian.tar.gz` | `plugins/mysql.so` (სჭირდება 32-ბიტიანი libmysqlclient) |
-| Linux | `mysql-R41-4-CentOS7.tar.gz` | CentOS 7-ის ვარიანტი |
+ის აკეთებს:
+1. `plugins/mysql.dll`, `plugins/streamer.dll`, `plugins/sscanf.dll` + `libmysql.dll`
+2. `pawno/pawncc.exe` (თუ არ არის)
+3. `gamemodes/freeroam.pwn` → `gamemodes/freeroam.amx`
 
-> მნიშვნელოვანი: პლაგინი **32-ბიტიანია** (SA-MP სერვერი 32-ბიტიანია).
-> ანგარიშის ჰეშირება სკრიპტშია (`accounts.inc`), ამიტომ `a_mysql.inc`-ის
-> ძველი/ახალი ვერსია არაფერს ცვლის — მთავარია R41-4 იყოს.
+ბოლოს დაბეჭდავს, რა დარჩა.
 
-### გ) კომპილატორი
-- **Windows:** `pawno/pawncc.exe` (მოყვება SA-MP სერვერის პაკეტს, Pawn 3.10.10).
-- **Linux:** `.amx`-ის კომპილაცია ყველაზე მარტივია Windows-ზე pawno-თი და
-  მიღებული `freeroam.amx`-ის ატვირთვა. თუ Linux-ზე გინდა კომპილაცია:
-  https://github.com/pawn-lang/compiler/releases (Pawn 3.10.10, `pawncc`).
+### ნაბიჯი 3. MySQL ბაზა
+თუ MySQL ჯერ არ გაქვს — დააყენე **XAMPP** (<https://www.apachefriends.org/>) ან
+**MySQL Community Server** (<https://dev.mysql.com/downloads/installer/>).
+XAMPP-ში უბრალოდ გაუშვი `XAMPP Control Panel` → `MySQL` → **Start**.
 
-ამ ეტაპზე **არ** გჭირდება: sscanf2, streamer, YSI. ისინი დაემატება მხოლოდ
-მაშინ, როცა რეალურად იქნება საჭირო (stage 3+).
+ბაზის შექმნა (აირჩიე ერთი):
 
----
+- **phpMyAdmin** (XAMPP): გახსენი <http://localhost/phpmyadmin> → ჩანართი `SQL` →
+  ჩასვი `database.sql`-ის შიგთავსი → `Go`.
+- **კონსოლი** (MySQL bin საქაღალდეში, ან სადაც `mysql.exe` არის):
+  ```
+  mysql -u root -p < database.sql
+  ```
 
-## 4. MySQL-ის მომზადება
+### ნაბიჯი 4. კონფიგურაცია
+`gamemodes/freeroam.pwn`-ის თავში (სტრიქონები ~21-24):
 
-1. დააინსტალირე MySQL 5.7 ან MariaDB (რეკომენდებულია R41-4-ისთვის).
-   MySQL 8-ზე შესაძლოა ავტორიზაციის შეცდომა მიიღო — მაშინ შექმენი იუზერი
-   ძველი ავტორიზაციით:
-   ```sql
-   CREATE USER 'freeroam'@'localhost' IDENTIFIED WITH mysql_native_password BY 'შენი_პაროლი';
-   GRANT ALL PRIVILEGES ON freeroam.* TO 'freeroam'@'localhost';
-   FLUSH PRIVILEGES;
-   ```
-2. გაუშვი `database.sql` (ქმნის ბაზას და `accounts` ცხრილს).
-   `accounts` ცხრილს სკრიპტიც თვითონ შექმნის გაშვებისას, მაგრამ ბაზა
-   (`CREATE DATABASE`) ხელით უნდა არსებობდეს.
-
----
-
-## 5. კონფიგურაცია
-
-`gamemodes/freeroam.pwn` — ზედა ნაწილი:
-
-```pawn
+```
 #define DB_HOST "127.0.0.1"
 #define DB_USER "root"
-#define DB_PASS ""
+#define DB_PASS ""          // XAMPP-ზე ცარიელია; თუ პაროლი გაქვს — ჩაწერე
 #define DB_NAME "freeroam"
 ```
 
-თუ ბაზას ვერ დაუკავშირდა, სერვერი ლოგში ჩაწერს მიზეზს და თვითონ გაითიშება
-(რომ "ცარიელი" სერვერი არ დარჩეს). ეს განზრახ ასეა.
+შეცვლის შემდეგ ხელახლა გაუშვი `setup.bat` (რომ `.amx` განახლდეს).
+
+`server.cfg`-ში **აუცილებლად** შეცვალე:
+```
+rcon_password chmengamgeba    // <- შენი პაროლი
+```
+
+### ნაბიჯი 5. გაშვება
+ორჯერ დააწკაპუნე `samp-server.exe`-ზე. კონსოლში უნდა დაინახო:
+
+```
+[MySQL] Connected to the database.
+Number of vehicle models: 212
+```
+
+შემდეგ SA-MP-ის კლიენტში დაამატე: `127.0.0.1:7777`.
+პირველ შესვლაზე გამოვა **Register** დიალოგი (nickname = username).
 
 ---
 
-## 6. კომპილაცია (Windows / pawno)
+## 3. Linux — ნაბიჯ-ნაბიჯ
 
-1. `includes/` საქაღალდე უნდა იყოს სერვერის root-ში, `gamemodes/`-ის გვერდით.
-2. გახსენი `pawno/pawno.exe` → `gamemodes/freeroam.pwn` → **F5**.
-3. უნდა გამოვიდეს: `1 Errors` → **0 errors, 0 warnings**.
-   (კოდი შემოწმებულია Pawn 3.10.10-ზე — 0 error, 0 warning.)
-
-`#include "../includes/...` ფარდობითი გზაა, ამიტომ pawno-ს სამუშაო
-საქაღალდეს მნიშვნელობა არ აქვს — იმუშავებს ისე, როგორც არის.
-
----
-
-## 7. Windows-ზე გაშვება
-
-1. `mysql-R41-4-win32.zip`-იდან:
-   - `mysql.dll` → `plugins/mysql.dll`
-   - `a_mysql.inc` → `pawno/include/a_mysql.inc`
-2. `server.cfg`:
-   ```
-   echo Executing Server Config...
-   lanmode 0
-   rcon_password changeme
-   maxplayers 50
-   port 7777
-   hostname Freeroam
-   gamemode0 freeroam 1
-   plugins mysql
-   announce 0
-   query 1
-   weburl www.sa-mp.com
-   onfoot_rate 40
-   incar_rate 40
-   weapon_rate 40
-   stream_distance 300.0
-   stream_rate 1000
-   maxnpc 0
-   logtimeformat [%H:%M:%S]
-   language English
-   ```
-3. თუ plugin არ ჩაიტვირთა — დააყენე **Microsoft Visual C++ 2015 Redistributable (x86)**
-   და, საჭიროების შემთხვევაში, 2010/2012 x86 ვერსიებიც (R41-4-ის README-შია).
-4. გაუშვი `samp-server.exe`.
-
----
-
-## 8. Linux-ზე გაშვება
+### ნაბიჯი 1. SA-MP 0.3.7 Linux სერვერი
+ჩამოტვირთე `samp037svr_R2-1.tar.gz` <https://www.sa-mp.com/download.php>-დან
+(აირჩიე **Linux Server**).
 
 ```bash
-# 1. 32-ბიტიანი ბიბლიოთეკები SA-MP სერვერისთვის (Debian/Ubuntu)
-sudo dpkg --add-architecture i386
+tar -xzf samp037svr_R2-1.tar.gz
+cp samp03svr announcement server.cfg.sample /path/to/repo/   # server.cfg-ს არ გადააწერო!
+cd /path/to/repo
+```
+
+### ნაბიჯი 2. ერთი ბრძანება
+
+```bash
+chmod +x setup.sh download_dependencies.sh pawno/pawncc
+./setup.sh
+```
+
+ის ჩამოტვირთავს `plugins/mysql.so`, `streamer.so`, `sscanf.so`, აკომპილირებს
+`gamemodes/freeroam.amx`-ს და დაბეჭდავს დარჩენილ ნაბიჯებს.
+
+საჭირო პაკეტები (Debian/Ubuntu):
+
+```bash
 sudo apt update
-sudo apt install libc6:i386 libstdc++6:i386 zlib1g:i386
+sudo apt install mysql-server curl unzip
+sudo dpkg --add-architecture i386                 # SA-MP სერვერი 32-ბიტიანია
+sudo apt install libc6:i386 libstdc++6:i386
+```
 
-# 2. პლაგინი: უმარტივესი გზაა სტატიკური ვერსია (libmysqlclient არ სჭირდება)
-tar xzf mysql-R41-4-Debian-static.tar.gz
-cp plugins/mysql_static.so /path/to/server/plugins/
+> MySQL plugin-ის **static** ვერსია იტვირთება (`mysql.so`), ამიტომ 32-ბიტიანი
+> `libmysqlclient` არ გჭირდება — საკმარისია `libc6:i386` და `libstdc++6:i386`.
 
-# 3. server.cfg-ში:
-#    plugins mysql_static.so
+### ნაბიჯი 3. ბაზა და კონფიგურაცია
 
-# 4. გაშვება
-chmod +x samp03svr announce
+```bash
+sudo mysql < database.sql          # ან: mysql -u root -p < database.sql
+```
+
+`gamemodes/freeroam.pwn`-ში შეავსე `DB_USER` / `DB_PASS` (Linux-ზე ხშირად root-ს
+პაროლი აქვს), შემდეგ `./setup.sh` ისევ გაუშვი.
+
+`server.cfg`-ში შეცვალე `rcon_password`. Linux-ზე `plugins` ხაზი ასე უნდა იყოს:
+
+```
+plugins mysql.so streamer.so sscanf.so
+```
+
+> `server.cfg`-ში უკვე `mysql streamer sscanf` წერია (Windows-ის სტილი).
+> Linux-ზე `.so` გაფართოება **სავალდებულოა**.
+
+### ნაბიჯი 4. გაშვება
+
+```bash
+chmod +x samp03svr
 ./samp03svr
 ```
 
-**თუ არასტატიკურ ვერსიას იყენებ (`mysql.so`):** საჭიროა 32-ბიტიანი MySQL client
-ბიბლიოთეკა, თორემ plugin ჩაიტვირთება შეცდომით
-(`libmysqlclient.so.18: cannot open shared object file`):
+---
+
+## 4. რას აკეთებს `setup` ზუსტად
+
+| ნაბიჯი | Windows | Linux |
+|---|---|---|
+| plugin-ები | `download_dependencies.ps1` (გამოიძახება `.bat`-იდან) | `download_dependencies.sh` |
+| კომპილატორი | `pawno/pawncc.exe` | `pawno/pawncc` (რეპოშია) |
+| კომპილაცია | `pawncc gamemodes\freeroam.pwn -ogamemodes\freeroam -iincludes -ipawno\include -d3` | იგივე |
+| შედეგი | `gamemodes/freeroam.amx` | `gamemodes/freeroam.amx` |
+
+ხელით კომპილაცია (თუ ოდესმე დაგჭირდა):
 
 ```bash
-sudo apt install libmysqlclient-dev:i386      # ან libmariadb-dev:i386
-# ძველ დისტრიბუტივებზე: libmysqlclient18:i386
+# Linux
+./pawno/pawncc gamemodes/freeroam.pwn -ogamemodes/freeroam -iincludes -ipawno/include -d3
+
+# Windows
+pawno\pawncc.exe gamemodes\freeroam.pwn -ogamemodes\freeroam -iincludes -ipawno\include -d3
 ```
 
-სხვა ხშირი შეცდომა: `version GLIBCXX_3.4.15 not found` → ძალიან ძველი GCC-ის
-ბიბლიოთეკაა, განაახლე სისტემა ან გამოიყენე სტატიკური `.so`.
+---
+
+## 5. ხელით ინსტალაცია (სკრიპტის გარეშე)
+
+ყველა plugin **32-ბიტიანია** (SA-MP სერვერი 32-ბიტიანია).
+
+| Plugin | ვერსია | ფაილი | სად ჩაიდოს |
+|---|---|---|---|
+| BlueG MySQL | R41-4 | `mysql-R41-4-win32.zip` | `plugins/mysql.dll` + `libmysql.dll` (სერვერის ძირში) |
+| BlueG MySQL | R41-4 | `mysql-R41-4-Debian-static.tar.gz` | `plugins/mysql.so` |
+| Incognito streamer | 2.9.6 | `samp-streamer-plugin-2.9.6.zip` | `plugins/streamer.dll` / `.so` |
+| Y-Less sscanf | 2.13.8 | `sscanf-2.13.8-win32.zip` / `-linux.tar.gz` | `plugins/sscanf.dll` / `.so` |
+| Pawn compiler | 3.10.10 | `pawnc-3.10.10-windows.zip` | `pawno/pawncc.exe` |
+
+ბმულები:
+- MySQL: <https://github.com/pBlueG/SA-MP-MySQL/releases/tag/R41-4>
+- streamer: <https://github.com/samp-incognito/samp-streamer-plugin/releases/tag/v2.9.6>
+- sscanf: <https://github.com/Y-Less/sscanf/releases/tag/v2.13.8>
+- compiler: <https://github.com/pawn-lang/compiler/releases/tag/v3.10.10>
+
+`includes/`-ში უკვე დევს `a_mysql.inc` (R41-4), `sscanf2.inc`, `streamer.inc` —
+ხელახლა არაფერი უნდა ჩამოტვირთო.
 
 ---
 
-## 9. ტესტის ჩეკლისტი (ამ ეტაპისთვის)
+## 6. ბრძანებები
 
-1. სერვერის ლოგში ჩანს:
-   `[MySQL] Connected to the database.` და `[MySQL] accounts table ready.`
-2. პირველად შესვლისას გამოდის **Register** დიალოგი → პაროლი 3–32 სიმბოლო.
-3. რეგისტრაციის შემდეგ მოთამაშე spawn-დება, ჩნდება `Welcome ... Money: $5000`.
-4. გათიშვის და ხელახლა შესვლისას გამოდის **Login** დიალოგი.
-5. არასწორი პაროლი → `Wrong password.` და დიალოგი ისევ ჩნდება.
-6. `accounts` ცხრილში `password` არის 64-სიმბოლოიანი hex (მაგ.
-   `5e884898da28047151d0e56f8dc6292773603d0d6aabbdd62a11ef721d1542d8` = "password").
-7. დისკონექტის შემდეგ ბაზაში money/score განახლებულია.
+### ყველა მოთამაშისთვის
+| ბრძანება | რას აკეთებს |
+|---|---|
+| `/v [მოდელი]` | მანქანის გამოძახება და ჩაჯდომა (მაგ. `/v 560`) |
+| `/tp` | ტელეპორტის მენიუ (12 ლოკაცია) |
+| `/skin` | სკინის მენიუ (15 სკინი) |
+| `/drift` | drift რეჟიმის დაწყება (HUD TextDraw-ით) |
+| `/stopdrift` | drift-ის დასრულება, ქულის დათვლა |
+| `/duel [id] [თანხა]` | drift დუელი მეორე მოთამაშესთან (60 წამი, მინ. $100) |
+| `/casino` | კაზინოს მენიუ: Blackjack, Poker, Roulette, Slots |
+| `/stats` | საკუთარი სტატისტიკა (money, score, admin level) |
+| `/top` | ტოპ-10 ყველაზე მდიდარი მოთამაშე |
+
+### ადმინი (დონე 1–3)
+| ბრძანება | დონე | რას აკეთებს |
+|---|---|---|
+| `/kick [id] [მიზეზი]` | 1 | მოთამაშის გაგდება |
+| `/mute [id]` | 1 | ჩატის დადუმება |
+| `/goto [id]` | 1 | მოთამაშესთან გადასვლა |
+| `/a [ტექსტი]` | 1 | ადმინ ჩატი |
+| `/ban [id] [მიზეზი]` | 2 | ბანი (nickname + IP, იწერება `bans` ცხრილში) |
+| `/get [id]` | 2 | მოთამაშის თავისთან გამოძახება |
+| `/weather [0-20]` | 2 | ამინდი |
+| `/time [0-23]` | 2 | საათი |
+| `/setscore [id] [ქულა]` | 3 | score-ის დაყენება |
+| `/ahelp` | 1 | ბრძანებების სია |
+
+ადმინის დონე იცვლება ბაზაში:
+```sql
+UPDATE accounts SET admin_level = 3 WHERE username = 'SheniNiki';
+```
+შემდეგ მოთამაშე ხელახლა უნდა შემოვიდეს სერვერზე.
+
+### კაზინო — თამაშის წესები
+- მინიმალური ფსონი **$100**, მაქსიმალური **$100000**; ფსონი არ უნდა აღემატებოდეს ბალანსს.
+- **Blackjack**: dealer დგება 17-ზე, natural = 3:2, double მხოლოდ პირველ ორ ბარათზე.
+- **Roulette**: წითელი/შავი/ლუწი/კენტი x2, ნული x14.
+- **Slots**: წყვილი x2, სამეული x10, სამი `Seven` x50.
+- **Poker** (Jacks or Better): წყვილი J+ x1 … Royal Flush x50; ინახავ ბარათებს და აჭერს DRAW-ს.
+- ყოველი თამაში იწერება `casino_log` ცხრილში (თამაში, ფსონი, ბალანსი).
+
+### ანტიჩიტი
+- სიჩქარე > 500 კმ/სთ → გაფრთხილება
+- ფეხით 300 ერთეულზე მეტი ნახტომი ერთ tick-ში → გაფრთხილება
+- health/armour > 100 → დაბრუნება 100/0-ზე
+- 3 გაფრთხილება → ავტომატური kick
 
 ---
 
-## 10. რაც გამოვტოვე სიმარტივისთვის (გითხრი, თუ გინდა დავამატო)
+## 7. ბაზის ცხრილები
 
-- **პაროლის დადასტურება რეგისტრაციისას** (მეორე ველი) — ერთი დიალოგით უფრო სუფთაა.
-- **ცდების ლიმიტი / anti-bruteforce** — ამ ეტაპზე არ არის.
-- **ავტომატური save ტაიმერით** — ახლა ინახება მხოლოდ დისკონექტზე.
-- **`/stats`, `/top money`** — მოდის სტატისტიკის ეტაპზე (მონაცემები უკვე მზადაა).
-- **`bans` ცხრილი** — მოდის ადმინის ეტაპზე.
+| ცხრილი | დანიშნულება |
+|---|---|
+| `accounts` | id, username, password (SHA-256), admin_level, money, score, created_at |
+| `casino_log` | ყოველი კაზინოს თამაში: account_id, game, amount, balance, created_at |
+| `bans` | username, ip, reason, admin, created_at |
+
+ცხრილებს gamemode თვითონაც ქმნის გაშვებისას (`CREATE TABLE IF NOT EXISTS`),
+ასე რომ `database.sql` მხოლოდ ბაზის შესაქმნელად არის საჭირო.
 
 ---
 
-## 11. შემდეგი ეტაპი
+## 8. ხშირი პრობლემები
 
-ეტაპი 2/3: `/v [id]`, `/tp` მენიუ, `/skin`, ადმინის weather/time — ამის შემდეგ
-მოდის Blackjack. დაელოდე დადასტურებას, რომ ეს ეტაპი მუშაობს.
+**`[MySQL] Connection failed`**
+შეამოწმე `DB_HOST/DB_USER/DB_PASS/DB_NAME` და რომ MySQL გაშვებულია.
+XAMPP-ზე პაროლი ცარიელია (`DB_PASS ""`). სერვერი ბაზის გარეშე არ ირთვება — ეს განზრახია.
+
+**`Failed to load plugin 'mysql'` / `plugins/mysql.so` not found**
+გაუშვი `setup` ხელახლა. Linux-ზე `server.cfg`-ში აუცილებლად `.so` გაფართოებით:
+`plugins mysql.so streamer.so sscanf.so`.
+
+**`Script[gamemodes/freeroam.amx]: Run time error` / `.amx` არ არსებობს**
+`gamemodes/freeroam.amx` არ არის აწყობილი — გაუშვი `setup.bat` / `./setup.sh`.
+
+**Windows: `libmysql.dll` ვერ მოიძებნა**
+ის სერვერის ძირეულ საქაღალდეში უნდა იდოს (`samp-server.exe`-ის გვერდით),
+არა `plugins/`-ში. `setup.bat` ამას ავტომატურად აკეთებს.
+
+**Linux: `error while loading shared libraries: libstdc++.so.6`**
+`sudo apt install libstdc++6:i386 libc6:i386`.
+
+**`Unknown command`**
+ბრძანებამდე მოთამაშე ავტორიზებული უნდა იყოს (`Register`/`Login` დიალოგი).
+
+**ბაზაში ძველი ტესტ-ანგარიშები მინდა წავშალო**
+```sql
+TRUNCATE TABLE accounts;
+TRUNCATE TABLE casino_log;
+```
+
+---
+
+## 9. რაც განზრახ გამოვტოვე (სიმარტივისთვის)
+
+- სახლი/ბიზნესი, ინვენტარი, ობიექტები — არ არის
+- `/top` მხოლოდ ფულით (არა score-ით/დროით)
+- ადმინ დონეები მხოლოდ 1–3
+- drift დუელი მხოლოდ 2 მოთამაშეზე, 60 წამი
+- ანგარიშის პაროლის აღდგენა ელფოსტით — არ არის (მხოლოდ SHA-256 ჰეში ბაზაში)
+
+---
+
+## 10. მინიმალური მოთხოვნები
+
+- **Windows**: Windows 7+ , MySQL 5.7+ ან XAMPP
+- **Linux**: 32-ბიტიანი ბიბლიოთეკები (`libc6:i386`, `libstdc++6:i386`), MySQL 5.7+
+- **კლიენტი**: SA-MP 0.3.7 R2/R3
