@@ -18,7 +18,6 @@ Write-Host ''
 
 Write-Host '[1/4] plugin-ები'
 & (Join-Path $Root 'download_dependencies.ps1')
-if ($LASTEXITCODE -ne 0) { throw 'plugin-ების ჩამოტვირთვა ვერ დასრულდა' }
 
 foreach ($f in 'mysql.dll', 'streamer.dll', 'sscanf.dll') {
     if (-not (Test-Path (Join-Path $Root ('plugins\' + $f)))) { throw ('plugins\' + $f + ' აკლია') }

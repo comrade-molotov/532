@@ -137,8 +137,7 @@ try {
         Write-Host 'ყველაფერი მზადაა: plugins\ სავსეა.'
         Write-Host 'შემდეგი ნაბიჯი:  setup.bat'
     } else {
-        Write-Host 'რაღაც აკლია - ნახე შეტყობინებები ზემოთ.'
-        exit 1
+        throw 'რაღაც აკლია - ნახე შეტყობინებები ზემოთ.' 
     }
 }
 finally {
