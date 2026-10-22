@@ -32,6 +32,12 @@ for f in mysql.so streamer.so sscanf.so; do
     [ -f "plugins/$f" ] || { echo "  [X] plugins/$f აკლია"; exit 1; }
 done
 
+# Linux-ზე server.cfg-ის plugins ხაზს .so გაფართოება სჭირდება
+if [ -f server.cfg ] && grep -qE '^plugins +mysql +streamer +sscanf *$' server.cfg; then
+    sed -i 's/^plugins .*/plugins mysql.so streamer.so sscanf.so/' server.cfg
+    echo "  [OK] server.cfg: plugins ხაზი გადაკეთდა Linux-ის ფორმატზე"
+fi
+
 # --------------------------------------------------------- 2. compiler
 echo
 echo "[2/4] კომპილატორი"

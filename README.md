@@ -118,7 +118,7 @@ rcon_password chmengamgeba    // <- შენი პაროლი
 
 ```
 [MySQL] Connected to the database.
-Number of vehicle models: 212
+[MySQL] tables ready.
 ```
 
 შემდეგ SA-MP-ის კლიენტში დაამატე: `127.0.0.1:7777`.
